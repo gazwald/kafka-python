@@ -1,6 +1,5 @@
 import json
 import os
-from collections import OrderedDict
 from typing import Optional
 
 from kafka.vendor.amazon.aws_auth import AwsSig4Auth
@@ -14,15 +13,15 @@ __all__ = ["AwsMskIamClient"]
 
 
 class AwsMskIamClient:
-    def __init__(self, host: str):
-        self.auth = AwsSig4Auth(
-            host=host,
-            credentials=self._get_credentials(),
-        )
+    def __init__(self, host: str, credentials: Optional[AwsCredentials] = None):
+        if not credentials:
+            credentials = self._get_credentials()
+
+        self.auth = AwsSig4Auth(host=host, credentials=credentials)
 
     @property
     def first_message(self) -> bytes:
-        parameters: OrderedDict[str, str] = self._create_parameters()
+        parameters: dict[str, str] = self._create_parameters()
         message: bytes = self._json_encode(parameters)
         return message
 
@@ -34,14 +33,14 @@ class AwsMskIamClient:
         return AwsCredentials(role_arn=role_arn, session_name=session_name)
 
     @staticmethod
-    def _json_encode(parameters: OrderedDict[str, str]) -> bytes:
+    def _json_encode(parameters: dict[str, str]) -> bytes:
         json_payload: str = json.dumps(
             parameters, separators=(",", ":"), ensure_ascii=False
         )
         return json_payload.encode("utf-8")
 
-    def _create_parameters(self) -> OrderedDict[str, str]:
-        parameters: OrderedDict[str, str] = OrderedDict()
+    def _create_parameters(self) -> dict[str, str]:
+        parameters: dict[str, str] = {}
 
         parameters["version"] = self.auth.version
         parameters["host"] = self.auth.host
@@ -49,6 +48,6 @@ class AwsMskIamClient:
         parameters.update(
             self.auth.canonical_query_dict(uriencoded=False, lower_case=True)
         )
-        parameters["x-amz-signature"] = self.auth.signature()
+        parameters["x-amz-signature"] = self.auth.signature
 
         return parameters

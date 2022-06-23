@@ -17,6 +17,9 @@ class AwsCredentials:
 
     def __init__(
         self,
+        access_key: Optional[str] = None,
+        secret_key: Optional[str] = None,
+        token: Optional[str] = None,
         role_arn: Optional[str] = None,
         session_name: Optional[str] = None,
         region: Optional[str] = None,
@@ -24,8 +27,9 @@ class AwsCredentials:
     ):
         self.session: Session = session or Session()
         self._region: str = self._check_region(region)
-
-        if role_arn and session_name:
+        if access_key and secret_key and token:
+            self._validate_credentials(access_key, secret_key, token)
+        elif role_arn and session_name:
             self.from_sts(role_arn, session_name, region)
         else:
             self.from_env()

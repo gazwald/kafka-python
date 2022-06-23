@@ -1,12 +1,10 @@
+import datetime
 import hmac
 import logging
-from collections import OrderedDict
-from datetime import datetime
 from hashlib import sha256
-from typing import Dict, List
 from urllib.parse import quote
 
-from kafka.vendor.amazon.aws_credentials import AwsCredentials
+from kafka.vendor.amazon import AwsCredentials
 
 __all__ = ["AwsSig4Auth"]
 
@@ -22,15 +20,15 @@ class AwsSig4Auth:
         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     )
     expires_in_seconds: str = "900"
-    headers_to_sign: Dict[str, str]
+    headers_to_sign: dict[str, str]
     host: str
     method: str = "GET"
     region: str
     service: str = "kafka-cluster"
-    user_agent: str = "kafka-python-iam"
+    user_agent: str = "kafka-python"
     version: str = "2020_10_22"
 
-    now: datetime = datetime.utcnow()
+    now = datetime.datetime.utcnow()
     timestamp: str = now.strftime("%Y%m%dT%H%M%SZ")
     datestamp: str = now.strftime("%Y%m%d")
 
@@ -78,27 +76,26 @@ class AwsSig4Auth:
             safe += "/"
 
         result: str = quote(input_str, safe=safe)
-        log.debug("uri_encode: %s", result)
         return result
 
     def canonical_query_dict(
         self, uriencoded: bool = True, lower_case: bool = False
-    ) -> OrderedDict[str, str]:
-        params: OrderedDict[str, str] = OrderedDict()
+    ) -> dict[str, str]:
+        params: dict[str, str] = {}
 
         params["Action"] = self.action
         params["X-Amz-Algorithm"] = self.algorithm
-        params["X-Amz-Credential"] = self.scope()
+        params["X-Amz-Credential"] = self.credential_scope
         params["X-Amz-Date"] = self.timestamp
         params["X-Amz-Expires"] = self.expires_in_seconds
         params["X-Amz-Security-Token"] = self.token
         params["X-Amz-SignedHeaders"] = self.signed_headers
 
         if lower_case:
-            params = OrderedDict((key.lower(), value) for key, value in params.items())
+            params = dict((key.lower(), value) for key, value in params.items())
 
         if uriencoded:
-            params = OrderedDict(
+            params = dict(
                 (self.uri_encode(key, encode_slash=False), self.uri_encode(value))
                 for key, value in params.items()
             )
@@ -107,9 +104,8 @@ class AwsSig4Auth:
 
     @property
     def canonical_query_string(self) -> str:
-        params: OrderedDict[str, str] = self.canonical_query_dict()
+        params: dict[str, str] = self.canonical_query_dict()
         result: str = "&".join([f"{k}={v}" for k, v in params.items()])
-        logging.debug("canonical_query_string: %s", result)
         return result
 
     @property
@@ -121,47 +117,62 @@ class AwsSig4Auth:
     def signed_headers(self) -> str:
         return "host"
 
+    @property
     def canonical_request(self) -> str:
-        request: List[str] = []
-        request.append(self.method.upper())
-        request.append(self.canonical_uri)
-        request.append(self.canonical_query_string)
-        request.append(self.canonical_headers)
-        request.append(self.signed_headers)
-        request.append(self.empty_sha256_hash)
+        request: list[str] = [
+            self.method.upper(),
+            self.canonical_uri,
+            self.canonical_query_string,
+            self.canonical_headers,
+            self.signed_headers,
+            self.empty_sha256_hash,
+        ]
         result: str = "\n".join(request)
-        logging.debug("cannonical_request: %s", result)
         return result
 
-    def scope(self) -> str:
-        scope: List[str] = []
-        scope.append(self.access_key)
-        scope.append(self.datestamp)
-        scope.append(self.region)
-        scope.append(self.service)
-        scope.append("aws4_request")
+    @property
+    def credential_scope(self) -> str:
+        scope: list[str] = [
+            self.access_key,
+            self.datestamp,
+            self.region,
+            self.service,
+            "aws4_request",
+        ]
         result: str = "/".join(scope)
-        logging.debug("scope: %s", result)
         return result
 
+    @property
+    def scope(self) -> str:
+        scope: list[str] = [
+            self.datestamp,
+            self.region,
+            self.service,
+            "aws4_request",
+        ]
+        result: str = "/".join(scope)
+        return result
+
+    @property
     def string_to_sign(self) -> str:
-        canonical_request = self.canonical_request()
-        string_to_sign: List[str] = []
-        string_to_sign.append(self.algorithm)
-        string_to_sign.append(self.timestamp)
-        string_to_sign.append(self.scope())
-        string_to_sign.append(self._hash_string(canonical_request))
+        canonical_request = self.canonical_request
+        string_to_sign: list[str] = [
+            self.algorithm,
+            self.timestamp,
+            self.scope,
+            self._hash_string(canonical_request),
+        ]
         result: str = "\n".join(string_to_sign)
-        logging.debug("string_to_sign: %s", result)
         return result
 
+    @property
     def signature(self) -> str:
         key: bytes = self._encode(f"AWS4{self.credentials.secret_key}")
 
         date_key: bytes = self._sign_bytes(key, self.datestamp)
         date_region_key: bytes = self._sign_bytes(date_key, self.region)
         date_region_service_key: bytes = self._sign_bytes(date_region_key, self.service)
-
         signing_key: bytes = self._sign_bytes(date_region_service_key, "aws4_request")
-        signature: str = self._sign_bytes_as_hex(signing_key, self.string_to_sign())
+
+        signature: str = self._sign_bytes_as_hex(signing_key, self.string_to_sign)
         return signature
