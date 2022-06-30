@@ -694,7 +694,7 @@ class BrokerConnection(object):
                     err = Errors.KafkaConnectionError("%s: %s" % (self, e))
                     close = True
                 else:
-                    (recv_size,) = struct.unpack("4B", data)
+                    _, recv_size = set(struct.unpack("4B", data))
                     log.debug(f"Response size: {recv_size}")
                     if recv_size:
                         try:

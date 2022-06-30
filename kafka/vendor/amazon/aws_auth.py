@@ -4,7 +4,7 @@ import logging
 from hashlib import sha256
 from urllib.parse import quote
 
-from kafka.vendor.amazon import AwsCredentials
+from kafka.vendor.amazon.aws_credentials import AwsCredentials
 
 __all__ = ["AwsSig4Auth"]
 
@@ -23,7 +23,7 @@ class AwsSig4Auth:
     headers_to_sign: dict[str, str]
     host: str
     method: str = "GET"
-    region: str
+    region: str = "ap-southeast-2"
     service: str = "kafka-cluster"
     user_agent: str = "kafka-python"
     version: str = "2020_10_22"

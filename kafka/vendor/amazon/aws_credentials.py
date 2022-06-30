@@ -41,9 +41,9 @@ class AwsCredentials:
     def _check_region(self, region: Optional[str] = None) -> str:
         region_name: str
         if not region:
-            region_name = self.session.get_config_variable("region")
+            region_name = os.getenv("AWS_DEFAULT_REGION", "ap-southeast-2")
         else:
-            region_name = region
+            region_name = "ap-southeast-2"
 
         return region_name
 
